@@ -1,0 +1,48 @@
+[package]
+name = "wedge"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["console_error_panic_hook"]
+
+[dependencies]
+wasm-bindgen = "0.2.84"
+js-sys = "0.3.61"
+wasm-bindgen-futures = "0.4.34"
+tokio = {version="1.25.0", features=["rt", "sync"]}
+mat4 = "0.2"
+console_error_panic_hook = { version = "0.1.1", optional = true }
+
+[dependencies.web-sys]
+version = "0.3.61"
+features = [
+  'Headers',
+  'Request',
+  'RequestInit',
+  'RequestMode',
+  'Response',
+  'Window',
+  'File',
+  'FileList',
+  'FileReader',
+  'console',
+  'HtmlInputElement',
+  'HtmlDivElement',
+  'HtmlCanvasElement',
+  'Event',
+  'Document',
+  'Blob',
+  'WebGlBuffer',
+  'WebGlVertexArrayObject',
+  'WebGlRenderingContext',
+  'WebGlUniformLocation',
+  'WebGlProgram',
+  'WebGlShader',
+  'MouseEvent',
+]
+
+
+
+[profile.release]
+opt-level = "s"
