@@ -20,7 +20,6 @@ pub fn set_event_handlers(canvas: HtmlCanvasElement, zoom: Rc<RefCell<f32>>, dra
 
     // ZOOM
     {
-        let zoom = zoom.clone();
         let zoom_cb = Closure::wrap(Box::new(move |event: WheelEvent| {
             *zoom.borrow_mut() += event.delta_y() as f32 / WHEEL_DRAG;
         }) as Box<dyn FnMut(WheelEvent)>);
@@ -39,6 +38,7 @@ pub fn set_event_handlers(canvas: HtmlCanvasElement, zoom: Rc<RefCell<f32>>, dra
             .unwrap();
         mousedown_cb.forget();
     }
+
     // MOUSEUP and MOUSEOUT
     {
         let drag = drag.clone();
@@ -53,6 +53,7 @@ pub fn set_event_handlers(canvas: HtmlCanvasElement, zoom: Rc<RefCell<f32>>, dra
             .unwrap();
         mouseup_cb.forget();
     }
+
     // MOUSEMOVE
     {
         let mousemove_cb = Closure::wrap(Box::new(move |event: MouseEvent| {
