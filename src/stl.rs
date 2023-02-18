@@ -25,7 +25,7 @@ impl std::fmt::Display for InvalidFileContentError {
     }
 }
 
-pub fn get_data(bytes: &Vec<u8>) -> Result<(Vec<f32>, u32), InvalidFileContentError> {
+pub fn get_data(bytes: &[u8]) -> Result<(Vec<f32>, u32), InvalidFileContentError> {
     let (payload, num_facets) = extract_data(bytes)?;
     let vertices = get_vertices(payload, num_facets)?;
     let num_vertices = STL_AXES as u32 * num_facets;
@@ -46,7 +46,7 @@ fn get_vertices(payload: Vec<u8>, num_facets: u32) -> Result<Vec<f32>, InvalidFi
         payload.by_ref().take(STL_EXTRA_BYTES).count();
     }
 
-    if payload.next() != None {
+    if payload.next().is_some() {
         return Err(InvalidFileContentError::new("STL: Payload is too large"));
     }
 
@@ -60,13 +60,13 @@ fn get_vertex(payload: &mut Iter<u8>, max_value: &mut f32, vertices: &mut Vec<f3
     let v: [u8; STL_F32_BYTES] = v.try_into().unwrap();
     let v = f32::from_le_bytes(v);
 
-    if v > *max_value {
-        *max_value = v;
+    if v.abs() > *max_value {
+        *max_value = v.abs();
     }
     vertices.push(v);
 }
 
-fn extract_data(bytes: &Vec<u8>) -> Result<(Vec<u8>, u32), InvalidFileContentError> {
+fn extract_data(bytes: &[u8]) -> Result<(Vec<u8>, u32), InvalidFileContentError> {
     let mut b_it = bytes.iter();
     let header: Vec<&u8> = b_it.by_ref().take(STL_HEADER_BYTES).collect();
     if header.len() != STL_HEADER_BYTES {
@@ -83,7 +83,7 @@ fn extract_data(bytes: &Vec<u8>) -> Result<(Vec<u8>, u32), InvalidFileContentErr
         ));
     }
     let num_facets: Result<[u8; 4], _> = num_facets.try_into();
-    if let Err(_) = num_facets {
+    if num_facets.is_err() {
         return Err(InvalidFileContentError::new(""));
     }
     let num_facets = u32::from_le_bytes(num_facets.unwrap());

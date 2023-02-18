@@ -1,0 +1,26 @@
+* { margin:0; padding:0; }
+
+html, body { width:100%; height:100%; }
+
+canvas { display:block; }
+
+.file-input-div {
+    position: absolute; 
+    left: 0; 
+    right: 0; 
+    margin-top: 2vh;
+    margin-left: auto; 
+    margin-right: auto; 
+    width: 100%;
+}
+
+.file-input {
+    position: relative;
+    display: block;
+    margin: 0 auto;
+    text-align: center;
+    padding: 1rem;
+    border-color: aqua;
+    border-style: double;
+    border-radius: 1rem;
+}

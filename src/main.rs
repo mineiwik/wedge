@@ -1,15 +1,17 @@
-extern crate mat4;
 use js_sys::{Uint8Array, WebAssembly};
 use std::cell::RefCell;
 use std::f32::consts::PI;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use web_sys::{
-    console, Event, EventTarget, FileReader, HtmlDivElement, HtmlInputElement, MouseEvent,
+    console, Event, FileReader, HtmlDivElement, HtmlInputElement,
     WebGlBuffer, WebGlProgram, WebGlRenderingContext, WebGlShader, WebGlUniformLocation,
 };
+use utils::{window, resize_canvas};
 
 mod stl;
+mod event_handlers;
+mod utils;
 
 const AMORTIZATION: f32 = 0.95;
 
@@ -34,14 +36,15 @@ fn set_file_reader() -> Result<(), JsValue> {
     let document = window()
         .document()
         .expect("should have a document on window");
-    let file_in_div = document.get_element_by_id("file-in").unwrap();
+    let file_in_div = document.get_element_by_id("file-input-div").unwrap();
     let file_in_div: HtmlDivElement = file_in_div.dyn_into()?;
 
     let fileinput: HtmlInputElement = document
         .create_element("input")?
         .dyn_into::<HtmlInputElement>()?;
 
-    fileinput.set_id("file-upload");
+    fileinput.set_id("file-input");
+    fileinput.set_class_name("file-input");
     fileinput.set_type("file");
 
     let filereader = FileReader::new()?;
@@ -139,67 +142,15 @@ fn another(vertices: Vec<f32>, num_vertices: u32) -> Result<(), JsValue> {
     let phi = Rc::new(RefCell::new(0.0));
     let dx = Rc::new(RefCell::new(0.0));
     let dy = Rc::new(RefCell::new(0.0));
-    let canvas_width = Rc::new(RefCell::new(canvas.width() as f32));
-    let canvas_height = Rc::new(RefCell::new(canvas.height() as f32));
 
-    // get canvas as event target
-    let event_target: EventTarget = canvas.into();
+    // Define event handlers
+    event_handlers::set_event_handlers(canvas.clone(), drag.clone(), theta.clone(), phi.clone(), dx.clone(), dy.clone());
+    
+    // Resize canvas to fit window
+    resize_canvas(canvas);
 
-    // Add event listeners
-    // MOUSEDOWN
-    {
-        let drag = drag.clone();
-        let mousedown_cb = Closure::wrap(Box::new(move |_event: MouseEvent| {
-            *drag.borrow_mut() = true;
-        }) as Box<dyn FnMut(MouseEvent)>);
-        event_target
-            .add_event_listener_with_callback("mousedown", mousedown_cb.as_ref().unchecked_ref())
-            .unwrap();
-        mousedown_cb.forget();
-    }
-    // MOUSEUP and MOUSEOUT
-    {
-        let drag = drag.clone();
-        let mouseup_cb = Closure::wrap(Box::new(move |_event: MouseEvent| {
-            *drag.borrow_mut() = false;
-        }) as Box<dyn FnMut(MouseEvent)>);
-        event_target
-            .add_event_listener_with_callback("mouseup", mouseup_cb.as_ref().unchecked_ref())
-            .unwrap();
-        event_target
-            .add_event_listener_with_callback("mouseout", mouseup_cb.as_ref().unchecked_ref())
-            .unwrap();
-        mouseup_cb.forget();
-    }
-    // MOUSEMOVE
-    {
-        let theta = theta.clone();
-        let phi = phi.clone();
-        let canvas_width = canvas_width.clone();
-        let canvas_height = canvas_height.clone();
-        let dx = dx.clone();
-        let dy = dy.clone();
-        let drag = drag.clone();
-        let mousemove_cb = Closure::wrap(Box::new(move |event: MouseEvent| {
-            if *drag.borrow() {
-                let cw = *canvas_width.borrow();
-                let ch = *canvas_height.borrow();
-                *dx.borrow_mut() = (event.movement_x() as f32) * 2.0 * PI / cw;
-                *dy.borrow_mut() = (event.movement_y() as f32) * 2.0 * PI / ch;
-                *theta.borrow_mut() += *dx.borrow();
-                *phi.borrow_mut() += *dy.borrow();
-            }
-        }) as Box<dyn FnMut(web_sys::MouseEvent)>);
-        event_target
-            .add_event_listener_with_callback("mousemove", mousemove_cb.as_ref().unchecked_ref())
-            .unwrap();
-        mousemove_cb.forget();
-    }
     // RequestAnimationFrame
     {
-        let dx = dx.clone();
-        let dy = dy.clone();
-        let drag = drag.clone();
         // Request animation frame
         *g.borrow_mut() = Some(Closure::wrap(Box::new(move |_d| {
             if !*drag.borrow() {
@@ -293,7 +244,7 @@ fn drawScene(
         vertexPosition,
         (location_projectionMatrix, location_modelViewMatrix),
     ) = programInfo;
-    gl.clear_color(0.0, 0.0, 0.0, 1.0);
+    gl.clear_color(0.0, 0.0, 0.0, 0.0);
     gl.clear_depth(1.0);
     gl.enable(WebGlRenderingContext::DEPTH_TEST);
 
@@ -314,12 +265,12 @@ fn drawScene(
 
     let mut modelViewMatrix = mat4::new_identity();
 
-    let mat_to_translate = modelViewMatrix.clone();
+    let mat_to_translate = modelViewMatrix;
     mat4::translate(&mut modelViewMatrix, &mat_to_translate, &[-0.0, 0.0, -6.0]);
 
-    let mat_to_rotate = modelViewMatrix.clone();
+    let mat_to_rotate = modelViewMatrix;
     mat4::rotate_x(&mut modelViewMatrix, &mat_to_rotate, &phi);
-    let mat_to_rotate = modelViewMatrix.clone();
+    let mat_to_rotate = modelViewMatrix;
     mat4::rotate_y(&mut modelViewMatrix, &mat_to_rotate, &theta);
 
     {
@@ -438,10 +389,6 @@ pub fn link_program(
             .get_program_info_log(&program)
             .unwrap_or_else(|| String::from("Unknown error creating program object")))
     }
-}
-
-pub fn window() -> web_sys::Window {
-    web_sys::window().expect("no global `window` exists")
 }
 
 pub fn request_animation_frame(f: &Closure<dyn FnMut(f32)>) {
