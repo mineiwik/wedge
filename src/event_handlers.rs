@@ -2,10 +2,11 @@ use std::{rc::Rc, cell::RefCell};
 use std::f32::consts::PI;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
-use web_sys::{EventTarget, HtmlCanvasElement, Event, MouseEvent};
+use web_sys::{EventTarget, HtmlCanvasElement, Event, MouseEvent, WheelEvent};
+use crate::constants::WHEEL_DRAG;
 use crate::utils::{window, resize_canvas};
 
-pub fn set_event_handlers(canvas: HtmlCanvasElement, drag: Rc<RefCell<bool>>, theta: Rc<RefCell<f32>>, phi: Rc<RefCell<f32>>, dx: Rc<RefCell<f32>>, dy: Rc<RefCell<f32>>) {
+pub fn set_event_handlers(canvas: HtmlCanvasElement, zoom: Rc<RefCell<f32>>, drag: Rc<RefCell<bool>>, theta: Rc<RefCell<f32>>, phi: Rc<RefCell<f32>>, dx: Rc<RefCell<f32>>, dy: Rc<RefCell<f32>>) {
     let event_target: EventTarget = canvas.clone().into();
     // RESIZE
     {
@@ -15,6 +16,16 @@ pub fn set_event_handlers(canvas: HtmlCanvasElement, drag: Rc<RefCell<bool>>, th
         }) as Box<dyn FnMut(Event)>);
         window().add_event_listener_with_callback("resize", resize_cb.as_ref().unchecked_ref()).unwrap();
         resize_cb.forget();
+    }
+
+    // ZOOM
+    {
+        let zoom = zoom.clone();
+        let zoom_cb = Closure::wrap(Box::new(move |event: WheelEvent| {
+            *zoom.borrow_mut() += event.delta_y() as f32 / WHEEL_DRAG;
+        }) as Box<dyn FnMut(WheelEvent)>);
+        event_target.add_event_listener_with_callback("wheel", zoom_cb.as_ref().unchecked_ref()).unwrap();
+        zoom_cb.forget();
     }
 
     // MOUSEDOWN

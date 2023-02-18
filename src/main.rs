@@ -12,6 +12,7 @@ use utils::{window, resize_canvas};
 mod stl;
 mod event_handlers;
 mod utils;
+mod constants;
 
 const AMORTIZATION: f32 = 0.95;
 
@@ -137,6 +138,7 @@ fn another(vertices: Vec<f32>, num_vertices: u32) -> Result<(), JsValue> {
     // Draw the scene repeatedly
     let f = Rc::new(RefCell::new(None));
     let g = f.clone();
+    let zoom = Rc::new(RefCell::new(-5.0));
     let drag = Rc::new(RefCell::new(false));
     let theta = Rc::new(RefCell::new(0.0));
     let phi = Rc::new(RefCell::new(0.0));
@@ -144,7 +146,7 @@ fn another(vertices: Vec<f32>, num_vertices: u32) -> Result<(), JsValue> {
     let dy = Rc::new(RefCell::new(0.0));
 
     // Define event handlers
-    event_handlers::set_event_handlers(canvas.clone(), drag.clone(), theta.clone(), phi.clone(), dx.clone(), dy.clone());
+    event_handlers::set_event_handlers(canvas.clone(), zoom.clone(), drag.clone(), theta.clone(), phi.clone(), dx.clone(), dy.clone());
     
     // Resize canvas to fit window
     resize_canvas(canvas);
@@ -163,6 +165,7 @@ fn another(vertices: Vec<f32>, num_vertices: u32) -> Result<(), JsValue> {
                 &gl.clone(),
                 programm_info.clone(),
                 buffers.clone(),
+                *zoom.borrow(),
                 *theta.borrow(),
                 *phi.borrow(),
                 num_vertices,
@@ -234,6 +237,7 @@ fn drawScene(
     gl: &WebGlRenderingContext,
     programInfo: ProgramInfo,
     buffers: Buffers,
+    zoom: f32,
     theta: f32,
     phi: f32,
     num_vertices: u32,
@@ -266,7 +270,7 @@ fn drawScene(
     let mut modelViewMatrix = mat4::new_identity();
 
     let mat_to_translate = modelViewMatrix;
-    mat4::translate(&mut modelViewMatrix, &mat_to_translate, &[-0.0, 0.0, -6.0]);
+    mat4::translate(&mut modelViewMatrix, &mat_to_translate, &[-0.0, 0.0, zoom]);
 
     let mat_to_rotate = modelViewMatrix;
     mat4::rotate_x(&mut modelViewMatrix, &mat_to_rotate, &phi);
