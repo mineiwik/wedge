@@ -1,20 +1,18 @@
+use constants::{AMORTIZATION, FIELD_OF_VIEW, VERTICES_PER_FACET};
 use js_sys::{Uint8Array, WebAssembly};
 use std::cell::RefCell;
-use std::f32::consts::PI;
 use std::rc::Rc;
-use utils::{resize_canvas, window};
+use utils::{compile_shader, link_program, request_animation_frame, resize_canvas, window};
 use wasm_bindgen::prelude::*;
 use web_sys::{
     console, Event, FileReader, HtmlDivElement, HtmlInputElement, WebGlBuffer, WebGlProgram,
-    WebGlRenderingContext, WebGlShader, WebGlUniformLocation,
+    WebGlRenderingContext, WebGlUniformLocation,
 };
 
 mod constants;
 mod event_handlers;
 mod stl;
 mod utils;
-
-const AMORTIZATION: f32 = 0.95;
 
 #[derive(Debug, Clone)]
 struct ProgramInfo(
@@ -25,6 +23,7 @@ struct ProgramInfo(
         Result<WebGlUniformLocation, String>,
     ),
 );
+
 #[derive(Debug, Clone)]
 struct Buffers(WebGlBuffer, WebGlBuffer);
 
@@ -115,7 +114,7 @@ fn another(vertices: Vec<f32>, num_vertices: u32) -> Result<(), JsValue> {
         }
     "#;
 
-    let shader_program = initShaderProgram(&gl, vertex_shader_source, fragment_shader_source)?;
+    let shader_program = init_shader_program(&gl, vertex_shader_source, fragment_shader_source)?;
 
     let programm_info = {
         let vertex_pos = gl.get_attrib_location(&shader_program, "aVertexPosition") as u32;
@@ -133,7 +132,7 @@ fn another(vertices: Vec<f32>, num_vertices: u32) -> Result<(), JsValue> {
     };
 
     // objects we'll be drawing.
-    let buffers: Buffers = initBuffers(&gl, vertices, num_vertices)?;
+    let buffers: Buffers = init_buffers(&gl, vertices, num_vertices)?;
 
     // Draw the scene repeatedly
     let f = Rc::new(RefCell::new(None));
@@ -157,58 +156,56 @@ fn another(vertices: Vec<f32>, num_vertices: u32) -> Result<(), JsValue> {
     );
 
     // Resize canvas to fit window
-    resize_canvas(canvas);
+    resize_canvas(canvas.clone());
 
     // RequestAnimationFrame
-    {
-        // Request animation frame
-        *g.borrow_mut() = Some(Closure::wrap(Box::new(move |_d| {
-            if !*drag.borrow() {
-                *dx.borrow_mut() *= AMORTIZATION;
-                *dy.borrow_mut() *= AMORTIZATION;
-                *theta.borrow_mut() += *dx.borrow();
-                *phi.borrow_mut() += *dy.borrow();
-            }
-            drawScene(
-                &gl.clone(),
-                programm_info.clone(),
-                buffers.clone(),
-                *zoom.borrow(),
-                *theta.borrow(),
-                *phi.borrow(),
-                num_vertices,
-            )
-            .unwrap();
-            request_animation_frame(f.borrow().as_ref().unwrap());
-        }) as Box<dyn FnMut(f32)>));
+    *g.borrow_mut() = Some(Closure::wrap(Box::new(move |_d| {
+        if !*drag.borrow() {
+            *dx.borrow_mut() *= AMORTIZATION;
+            *dy.borrow_mut() *= AMORTIZATION;
+            *theta.borrow_mut() += *dx.borrow();
+            *phi.borrow_mut() += *dy.borrow();
+        }
+        draw_scene(
+            &gl.clone(),
+            programm_info.clone(),
+            buffers.clone(),
+            *zoom.borrow(),
+            *theta.borrow(),
+            *phi.borrow(),
+            num_vertices,
+            &canvas,
+        )
+        .unwrap();
+        request_animation_frame(f.borrow().as_ref().unwrap());
+    }) as Box<dyn FnMut(f32)>));
 
-        request_animation_frame(g.borrow().as_ref().unwrap());
-    }
+    request_animation_frame(g.borrow().as_ref().unwrap());
+
     Ok(())
 }
 
-#[allow(non_snake_case)]
-fn initShaderProgram(
+fn init_shader_program(
     gl: &WebGlRenderingContext,
-    vsSource: &str,
-    fsSource: &str,
+    vs_source: &str,
+    fs_source: &str,
 ) -> Result<WebGlProgram, String> {
-    let v_shader = compile_shader(gl, WebGlRenderingContext::VERTEX_SHADER, vsSource);
-    let f_shader = compile_shader(gl, WebGlRenderingContext::FRAGMENT_SHADER, fsSource);
+    let v_shader = compile_shader(gl, WebGlRenderingContext::VERTEX_SHADER, vs_source);
+    let f_shader = compile_shader(gl, WebGlRenderingContext::FRAGMENT_SHADER, fs_source);
 
     link_program(gl, &v_shader?, &f_shader?)
 }
-#[allow(non_snake_case)]
-fn initBuffers(
+
+fn init_buffers(
     gl: &WebGlRenderingContext,
     vertices: Vec<f32>,
     num_vertices: u32,
 ) -> Result<Buffers, JsValue> {
-    let positionBuffer = gl
+    let position_buffer = gl
         .create_buffer()
         .ok_or("failed to create positionBuffer buffer")?;
 
-    gl.bind_buffer(WebGlRenderingContext::ARRAY_BUFFER, Some(&positionBuffer));
+    gl.bind_buffer(WebGlRenderingContext::ARRAY_BUFFER, Some(&position_buffer));
 
     let position_array = float_32_array!(vertices);
     gl.buffer_data_with_array_buffer_view(
@@ -217,12 +214,12 @@ fn initBuffers(
         WebGlRenderingContext::STATIC_DRAW,
     );
 
-    let indexBuffer = gl
+    let index_buffer = gl
         .create_buffer()
         .ok_or("failed to create indexBuffer buffer")?;
     gl.bind_buffer(
         WebGlRenderingContext::ELEMENT_ARRAY_BUFFER,
-        Some(&indexBuffer),
+        Some(&index_buffer),
     );
 
     let mut indices: Vec<u16> = vec![];
@@ -237,176 +234,94 @@ fn initBuffers(
         &index_array,
         WebGlRenderingContext::STATIC_DRAW,
     );
-    Ok(Buffers(positionBuffer, indexBuffer))
+    Ok(Buffers(position_buffer, index_buffer))
 }
-#[allow(non_snake_case)]
-#[allow(dead_code)]
-fn drawScene(
+
+fn draw_scene(
     gl: &WebGlRenderingContext,
-    programInfo: ProgramInfo,
+    program_info: ProgramInfo,
     buffers: Buffers,
     zoom: f32,
     theta: f32,
     phi: f32,
     num_vertices: u32,
+    canvas: &web_sys::HtmlCanvasElement,
 ) -> Result<(), JsValue> {
-    let Buffers(positionBuffer, indexBuffer) = buffers;
+    let Buffers(position_buffer, index_buffer) = buffers;
     let ProgramInfo(
-        shaderProgram,
-        vertexPosition,
-        (location_projectionMatrix, location_modelViewMatrix),
-    ) = programInfo;
-    gl.clear_color(0.0, 0.0, 0.0, 0.0);
+        shader_program,
+        vertex_position,
+        (location_projection_matrix, location_model_view_matrix),
+    ) = program_info;
+    gl.clear_color(0.375, 0.375, 0.375, 1.0);
     gl.clear_depth(1.0);
     gl.enable(WebGlRenderingContext::DEPTH_TEST);
 
     gl.clear(WebGlRenderingContext::COLOR_BUFFER_BIT | WebGlRenderingContext::DEPTH_BUFFER_BIT);
 
-    let fieldOfView = 45.0 * PI / 180.0;
-    let canvas: web_sys::HtmlCanvasElement = gl
-        .canvas()
-        .unwrap()
-        .dyn_into::<web_sys::HtmlCanvasElement>()?;
     gl.viewport(0, 0, canvas.width() as i32, canvas.height() as i32);
+
     let aspect: f32 = canvas.width() as f32 / canvas.height() as f32;
-    let zNear = 1.0;
-    let zFar = 100.0;
-    let mut projectionMatrix = mat4::new_zero();
+    let z_near = 1.0;
+    let z_far = 100.0;
 
-    mat4::perspective(&mut projectionMatrix, &fieldOfView, &aspect, &zNear, &zFar);
+    let mut projection_matrix = mat4::new_zero();
 
-    let mut modelViewMatrix = mat4::new_identity();
+    mat4::perspective(
+        &mut projection_matrix,
+        &FIELD_OF_VIEW,
+        &aspect,
+        &z_near,
+        &z_far,
+    );
 
-    let mat_to_translate = modelViewMatrix;
-    mat4::translate(&mut modelViewMatrix, &mat_to_translate, &[-0.0, 0.0, zoom]);
+    let mut model_view_matrix = mat4::new_identity();
 
-    let mat_to_rotate = modelViewMatrix;
-    mat4::rotate_x(&mut modelViewMatrix, &mat_to_rotate, &phi);
-    let mat_to_rotate = modelViewMatrix;
-    mat4::rotate_y(&mut modelViewMatrix, &mat_to_rotate, &theta);
+    let mat_to_translate = model_view_matrix;
+    mat4::translate(&mut model_view_matrix, &mat_to_translate, &[0.0, 0.0, zoom]);
 
-    {
-        let numComponents = 3;
-        let type_ = WebGlRenderingContext::FLOAT;
-        let normalize = false;
-        let stride = 0;
-        let offset = 0;
-        gl.bind_buffer(WebGlRenderingContext::ARRAY_BUFFER, Some(&positionBuffer));
+    let mat_to_rotate = model_view_matrix;
+    mat4::rotate_x(&mut model_view_matrix, &mat_to_rotate, &phi);
+    let mat_to_rotate = model_view_matrix;
+    mat4::rotate_y(&mut model_view_matrix, &mat_to_rotate, &theta);
 
-        gl.vertex_attrib_pointer_with_i32(
-            vertexPosition,
-            numComponents,
-            type_,
-            normalize,
-            stride,
-            offset,
-        );
-        gl.enable_vertex_attrib_array(vertexPosition);
-        // gl.bind_buffer(WebGlRenderingContext::ARRAY_BUFFER, None);
-    }
+    gl.bind_buffer(WebGlRenderingContext::ARRAY_BUFFER, Some(&position_buffer));
+    gl.vertex_attrib_pointer_with_i32(
+        vertex_position,
+        VERTICES_PER_FACET,
+        WebGlRenderingContext::FLOAT,
+        false,
+        0,
+        0,
+    );
+    gl.enable_vertex_attrib_array(vertex_position);
+    gl.bind_buffer(WebGlRenderingContext::ARRAY_BUFFER, None);
 
     gl.bind_buffer(
         WebGlRenderingContext::ELEMENT_ARRAY_BUFFER,
-        Some(&indexBuffer),
+        Some(&index_buffer),
     );
 
-    gl.use_program(Some(&shaderProgram));
+    gl.use_program(Some(&shader_program));
 
     gl.uniform_matrix4fv_with_f32_array(
-        Some(&location_projectionMatrix?),
+        Some(&location_projection_matrix?),
         false,
-        &projectionMatrix,
+        &projection_matrix,
     );
-    gl.uniform_matrix4fv_with_f32_array(Some(&location_modelViewMatrix?), false, &modelViewMatrix);
-    {
-        let vertexCount = num_vertices as i32;
-        let type_ = WebGlRenderingContext::UNSIGNED_SHORT;
-        let offset = 0;
-        gl.draw_elements_with_i32(WebGlRenderingContext::TRIANGLES, vertexCount, type_, offset);
-    }
+    gl.uniform_matrix4fv_with_f32_array(
+        Some(&location_model_view_matrix?),
+        false,
+        &model_view_matrix,
+    );
+    gl.draw_elements_with_i32(
+        WebGlRenderingContext::TRIANGLES,
+        num_vertices as i32,
+        WebGlRenderingContext::UNSIGNED_SHORT,
+        0,
+    );
 
     Ok(())
-}
-
-#[macro_export]
-macro_rules! float_32_array {
-    ($arr:expr) => {{
-        let memory_buffer = wasm_bindgen::memory()
-            .dyn_into::<WebAssembly::Memory>()?
-            .buffer();
-        let arr_location = $arr.as_ptr() as u32 / 4;
-        let array = js_sys::Float32Array::new(&memory_buffer)
-            .subarray(arr_location, arr_location + $arr.len() as u32);
-        array
-    }};
-}
-#[macro_export]
-macro_rules! uint_16_array {
-    ($arr:expr) => {{
-        let memory_buffer = wasm_bindgen::memory()
-            .dyn_into::<WebAssembly::Memory>()?
-            .buffer();
-        let arr_location = $arr.as_ptr() as u32 / 2;
-        let array = js_sys::Uint16Array::new(&memory_buffer)
-            .subarray(arr_location, arr_location + $arr.len() as u32);
-        array
-    }};
-}
-
-pub fn compile_shader(
-    context: &WebGlRenderingContext,
-    shader_type: u32,
-    source: &str,
-) -> Result<WebGlShader, String> {
-    let shader = context
-        .create_shader(shader_type)
-        .ok_or_else(|| String::from("Unable to create shader object"))?;
-    context.shader_source(&shader, source);
-    context.compile_shader(&shader);
-
-    if context
-        .get_shader_parameter(&shader, WebGlRenderingContext::COMPILE_STATUS)
-        .as_bool()
-        .unwrap_or(false)
-    {
-        Ok(shader)
-    } else {
-        Err(context
-            .get_shader_info_log(&shader)
-            .unwrap_or_else(|| String::from("Unknown error creating shader")))
-    }
-}
-
-pub fn link_program(
-    context: &WebGlRenderingContext,
-    vert_shader: &WebGlShader,
-    frag_shader: &WebGlShader,
-) -> Result<WebGlProgram, String> {
-    let program = context
-        .create_program()
-        .ok_or_else(|| String::from("Unable to create shader object"))?;
-
-    context.attach_shader(&program, vert_shader);
-    context.attach_shader(&program, frag_shader);
-    context.link_program(&program);
-
-    if context
-        .get_program_parameter(&program, WebGlRenderingContext::LINK_STATUS)
-        .as_bool()
-        .unwrap_or(false)
-    {
-        Ok(program)
-    } else {
-        Err(context
-            .get_program_info_log(&program)
-            .unwrap_or_else(|| String::from("Unknown error creating program object")))
-    }
-}
-
-pub fn request_animation_frame(f: &Closure<dyn FnMut(f32)>) {
-    window()
-        .request_animation_frame(f.as_ref().unchecked_ref())
-        .expect("should register `requestAnimationFrame` OK");
 }
 
 fn set_panic_hook() {
