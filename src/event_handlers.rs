@@ -1,12 +1,20 @@
-use std::{rc::Rc, cell::RefCell};
-use std::f32::consts::PI;
-use wasm_bindgen::JsCast;
-use wasm_bindgen::prelude::Closure;
-use web_sys::{EventTarget, HtmlCanvasElement, Event, MouseEvent, WheelEvent};
 use crate::constants::WHEEL_DRAG;
-use crate::utils::{window, resize_canvas};
+use crate::utils::{resize_canvas, window};
+use std::f32::consts::PI;
+use std::{cell::RefCell, rc::Rc};
+use wasm_bindgen::prelude::Closure;
+use wasm_bindgen::JsCast;
+use web_sys::{Event, EventTarget, HtmlCanvasElement, MouseEvent, WheelEvent};
 
-pub fn set_event_handlers(canvas: HtmlCanvasElement, zoom: Rc<RefCell<f32>>, drag: Rc<RefCell<bool>>, theta: Rc<RefCell<f32>>, phi: Rc<RefCell<f32>>, dx: Rc<RefCell<f32>>, dy: Rc<RefCell<f32>>) {
+pub fn set_event_handlers(
+    canvas: HtmlCanvasElement,
+    zoom: Rc<RefCell<f32>>,
+    drag: Rc<RefCell<bool>>,
+    theta: Rc<RefCell<f32>>,
+    phi: Rc<RefCell<f32>>,
+    dx: Rc<RefCell<f32>>,
+    dy: Rc<RefCell<f32>>,
+) {
     let event_target: EventTarget = canvas.clone().into();
     // RESIZE
     {
@@ -14,7 +22,9 @@ pub fn set_event_handlers(canvas: HtmlCanvasElement, zoom: Rc<RefCell<f32>>, dra
         let resize_cb = Closure::wrap(Box::new(move |_event: Event| {
             resize_canvas(canvas.clone());
         }) as Box<dyn FnMut(Event)>);
-        window().add_event_listener_with_callback("resize", resize_cb.as_ref().unchecked_ref()).unwrap();
+        window()
+            .add_event_listener_with_callback("resize", resize_cb.as_ref().unchecked_ref())
+            .unwrap();
         resize_cb.forget();
     }
 
@@ -23,7 +33,9 @@ pub fn set_event_handlers(canvas: HtmlCanvasElement, zoom: Rc<RefCell<f32>>, dra
         let zoom_cb = Closure::wrap(Box::new(move |event: WheelEvent| {
             *zoom.borrow_mut() += event.delta_y() as f32 / WHEEL_DRAG;
         }) as Box<dyn FnMut(WheelEvent)>);
-        event_target.add_event_listener_with_callback("wheel", zoom_cb.as_ref().unchecked_ref()).unwrap();
+        event_target
+            .add_event_listener_with_callback("wheel", zoom_cb.as_ref().unchecked_ref())
+            .unwrap();
         zoom_cb.forget();
     }
 

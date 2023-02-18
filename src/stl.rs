@@ -1,5 +1,7 @@
 use std::slice::Iter;
 
+use crate::utils::{Vec3, VecOps};
+
 const STL_HEADER_BYTES: usize = 0x50;
 const STL_NUMBER_FACETS_BYTES: usize = 0x4;
 const STL_FACET_RECORD_BYTES: usize = 0x32;
@@ -35,13 +37,21 @@ pub fn get_data(bytes: &[u8]) -> Result<(Vec<f32>, u32), InvalidFileContentError
 
 fn get_vertices(payload: Vec<u8>, num_facets: u32) -> Result<Vec<f32>, InvalidFileContentError> {
     let mut payload = payload.iter();
-    let mut max_value: f32 = f32::NEG_INFINITY;
+    let mut min_values = Vec3::new(f32::INFINITY);
+    let mut max_values = Vec3::new(f32::NEG_INFINITY);
     let mut vertices: Vec<f32> = vec![];
 
     for _ in 0..num_facets {
         payload.by_ref().take(STL_AXES * STL_F32_BYTES).count();
-        for _ in 0..STL_AXES * STL_VERTICES_PER_FACET {
-            get_vertex(payload.by_ref(), &mut max_value, &mut vertices);
+        for _ in 0..STL_VERTICES_PER_FACET {
+            for idx in 0..STL_AXES {
+                get_vertex(
+                    payload.by_ref(),
+                    max_values.get_mut(idx).unwrap(),
+                    min_values.get_mut(idx).unwrap(),
+                    &mut vertices,
+                );
+            }
         }
         payload.by_ref().take(STL_EXTRA_BYTES).count();
     }
@@ -50,19 +60,33 @@ fn get_vertices(payload: Vec<u8>, num_facets: u32) -> Result<Vec<f32>, InvalidFi
         return Err(InvalidFileContentError::new("STL: Payload is too large"));
     }
 
-    let vertices = vertices.into_iter().map(|x| x / max_value.abs()).collect();
+    let center_points = (max_values - min_values).scale(0.5);
+    let translations = center_points - max_values;
+    let scale = center_points.get_max();
+
+    vertices.iter_mut().enumerate().for_each(|(idx, v)| {
+        *v += *translations.get(idx % 3).unwrap();
+    });
+
+    vertices.iter_mut().for_each(|v| {
+        *v /= scale;
+    });
 
     Ok(vertices)
 }
 
-fn get_vertex(payload: &mut Iter<u8>, max_value: &mut f32, vertices: &mut Vec<f32>) {
+fn get_vertex(
+    payload: &mut Iter<u8>,
+    max_value: &mut f32,
+    min_value: &mut f32,
+    vertices: &mut Vec<f32>,
+) {
     let v: Vec<u8> = payload.take(STL_F32_BYTES).cloned().collect();
     let v: [u8; STL_F32_BYTES] = v.try_into().unwrap();
     let v = f32::from_le_bytes(v);
 
-    if v.abs() > *max_value {
-        *max_value = v.abs();
-    }
+    *max_value = max_value.max(v);
+    *min_value = min_value.min(v);
     vertices.push(v);
 }
 

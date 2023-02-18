@@ -2,17 +2,17 @@ use js_sys::{Uint8Array, WebAssembly};
 use std::cell::RefCell;
 use std::f32::consts::PI;
 use std::rc::Rc;
+use utils::{resize_canvas, window};
 use wasm_bindgen::prelude::*;
 use web_sys::{
-    console, Event, FileReader, HtmlDivElement, HtmlInputElement,
-    WebGlBuffer, WebGlProgram, WebGlRenderingContext, WebGlShader, WebGlUniformLocation,
+    console, Event, FileReader, HtmlDivElement, HtmlInputElement, WebGlBuffer, WebGlProgram,
+    WebGlRenderingContext, WebGlShader, WebGlUniformLocation,
 };
-use utils::{window, resize_canvas};
 
-mod stl;
-mod event_handlers;
-mod utils;
 mod constants;
+mod event_handlers;
+mod stl;
+mod utils;
 
 const AMORTIZATION: f32 = 0.95;
 
@@ -146,8 +146,16 @@ fn another(vertices: Vec<f32>, num_vertices: u32) -> Result<(), JsValue> {
     let dy = Rc::new(RefCell::new(0.0));
 
     // Define event handlers
-    event_handlers::set_event_handlers(canvas.clone(), zoom.clone(), drag.clone(), theta.clone(), phi.clone(), dx.clone(), dy.clone());
-    
+    event_handlers::set_event_handlers(
+        canvas.clone(),
+        zoom.clone(),
+        drag.clone(),
+        theta.clone(),
+        phi.clone(),
+        dx.clone(),
+        dy.clone(),
+    );
+
     // Resize canvas to fit window
     resize_canvas(canvas);
 
