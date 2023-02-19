@@ -237,6 +237,7 @@ fn init_buffers(
     Ok(Buffers(position_buffer, index_buffer))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_scene(
     gl: &WebGlRenderingContext,
     program_info: ProgramInfo,

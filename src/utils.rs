@@ -114,7 +114,7 @@ where
     }
     pub fn get_max(&self) -> T {
         let mut tmp = self.0;
-        tmp.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        tmp.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
         *tmp.first().unwrap()
     }
 }

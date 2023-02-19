@@ -60,9 +60,9 @@ fn get_vertices(payload: Vec<u8>, num_facets: u32) -> Result<Vec<f32>, InvalidFi
         return Err(InvalidFileContentError::new("STL: Payload is too large"));
     }
 
-    let center_points = (max_values - min_values).scale(0.5);
-    let translations = center_points - max_values;
-    let scale = center_points.get_max();
+    let half_lengths = (max_values - min_values).scale(0.5);
+    let translations = half_lengths - max_values;
+    let scale = half_lengths.get_max();
 
     vertices.iter_mut().enumerate().for_each(|(idx, v)| {
         *v += *translations.get(idx % 3).unwrap();
@@ -123,4 +123,30 @@ fn extract_data(bytes: &[u8]) -> Result<(Vec<u8>, u32), InvalidFileContentError>
         ));
     }
     Ok((payload, num_facets))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_cube_bytes_to_vertices() {
+        let cube = std::fs::read("tests/files/cube.stl").unwrap();
+
+        let (mut vertices, num_vertices) = get_data(&cube).unwrap();
+        vertices.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+
+        assert_eq!(num_vertices, 36);
+        assert!(vertices.first().unwrap().le(&1.0));
+    }
+
+    #[test]
+    fn test_box_bytes_to_vertices() {
+        let cube = std::fs::read("tests/files/box.stl").unwrap();
+
+        let (mut vertices, _) = get_data(&cube).unwrap();
+        vertices.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+
+        assert!(vertices.first().unwrap().le(&1.0));
+    }
 }
