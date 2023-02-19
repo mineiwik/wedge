@@ -1,4 +1,4 @@
-use constants::{AMORTIZATION, FIELD_OF_VIEW, COMPONENTS_PER_VERTEX, Z_NEAR, Z_FAR};
+use constants::{AMORTIZATION, COMPONENTS_PER_VERTEX, FIELD_OF_VIEW, Z_FAR, Z_NEAR};
 use js_sys::{Uint8Array, WebAssembly};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -252,7 +252,7 @@ fn draw_scene(
         vertex_position,
         (location_projection_matrix, location_model_view_matrix),
     ) = program_info;
-    
+
     gl.clear(WebGlRenderingContext::COLOR_BUFFER_BIT | WebGlRenderingContext::DEPTH_BUFFER_BIT);
     gl.viewport(0, 0, canvas.width() as i32, canvas.height() as i32);
 
@@ -288,7 +288,7 @@ fn draw_scene(
     );
 
     gl.enable_vertex_attrib_array(vertex_position);
-    
+
     gl.bind_buffer(WebGlRenderingContext::ARRAY_BUFFER, None);
 
     gl.bind_buffer(
@@ -303,7 +303,7 @@ fn draw_scene(
         false,
         &projection_matrix,
     );
-    
+
     gl.uniform_matrix4fv_with_f32_array(
         Some(&location_model_view_matrix?),
         false,
