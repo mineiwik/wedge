@@ -11,6 +11,7 @@ use web_sys::{
 
 mod constants;
 mod event_handlers;
+mod linalg;
 mod stl;
 mod utils;
 

@@ -1,6 +1,6 @@
 use std::slice::Iter;
 
-use crate::utils::{Vec3, VecOps};
+use crate::linalg::{Vec3, VecOps};
 
 const STL_HEADER_BYTES: usize = 0x50;
 const STL_NUMBER_FACETS_BYTES: usize = 0x4;
