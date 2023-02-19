@@ -24,14 +24,15 @@ macro_rules! float_32_array {
         array
     }};
 }
+
 #[macro_export]
-macro_rules! uint_16_array {
+macro_rules! uint_32_array {
     ($arr:expr) => {{
         let memory_buffer = wasm_bindgen::memory()
             .dyn_into::<WebAssembly::Memory>()?
             .buffer();
-        let arr_location = $arr.as_ptr() as u32 / 2;
-        let array = js_sys::Uint16Array::new(&memory_buffer)
+        let arr_location = $arr.as_ptr() as u32 / 4;
+        let array = js_sys::Uint32Array::new(&memory_buffer)
             .subarray(arr_location, arr_location + $arr.len() as u32);
         array
     }};

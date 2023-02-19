@@ -122,20 +122,18 @@ fn another(vertices: Vec<f32>, num_vertices: u32) -> Result<(), JsValue> {
         let projection_matrix = gl
             .get_uniform_location(&shader_program, "uProjectionMatrix")
             .ok_or_else(|| String::from("cannot get uProjectionMatrix"));
-        let model_view_matric = gl
+        let model_view_matrix = gl
             .get_uniform_location(&shader_program, "uModelViewMatrix")
             .ok_or_else(|| String::from("cannot get uModelViewMatrix"));
         ProgramInfo(
             shader_program,
             vertex_pos,
-            (projection_matrix, model_view_matric),
+            (projection_matrix, model_view_matrix),
         )
     };
 
-    // objects we'll be drawing.
     let buffers: Buffers = init_buffers(&gl, vertices, num_vertices)?;
 
-    // Draw the scene repeatedly
     let f = Rc::new(RefCell::new(None));
     let g = f.clone();
     let zoom = Rc::new(RefCell::new(-5.0));
@@ -145,7 +143,6 @@ fn another(vertices: Vec<f32>, num_vertices: u32) -> Result<(), JsValue> {
     let dx = Rc::new(RefCell::new(0.0));
     let dy = Rc::new(RefCell::new(0.0));
 
-    // Define event handlers
     event_handlers::set_event_handlers(
         canvas.clone(),
         zoom.clone(),
@@ -156,10 +153,8 @@ fn another(vertices: Vec<f32>, num_vertices: u32) -> Result<(), JsValue> {
         dy.clone(),
     );
 
-    // Resize canvas to fit window
     resize_canvas(canvas.clone());
 
-    // RequestAnimationFrame
     *g.borrow_mut() = Some(Closure::wrap(Box::new(move |_d| {
         if !*drag.borrow() {
             *dx.borrow_mut() *= AMORTIZATION;
@@ -223,13 +218,13 @@ fn init_buffers(
         Some(&index_buffer),
     );
 
-    let mut indices: Vec<u16> = vec![];
+    let mut indices: Vec<u32> = vec![];
 
     for i in 0..num_vertices {
-        indices.push(i as u16);
+        indices.push(i);
     }
 
-    let index_array = uint_16_array!(indices);
+    let index_array = uint_32_array!(indices);
     gl.buffer_data_with_array_buffer_view(
         WebGlRenderingContext::ELEMENT_ARRAY_BUFFER,
         &index_array,
@@ -316,10 +311,11 @@ fn draw_scene(
         false,
         &model_view_matrix,
     );
+    gl.get_extension("OES_element_index_uint").unwrap();
     gl.draw_elements_with_i32(
         WebGlRenderingContext::TRIANGLES,
         num_vertices as i32,
-        WebGlRenderingContext::UNSIGNED_SHORT,
+        WebGlRenderingContext::UNSIGNED_INT,
         0,
     );
 
