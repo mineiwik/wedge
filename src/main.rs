@@ -1,4 +1,4 @@
-use constants::{AMORTIZATION, FIELD_OF_VIEW, VERTICES_PER_FACET};
+use constants::{AMORTIZATION, FIELD_OF_VIEW, COMPONENTS_PER_VERTEX, Z_NEAR, Z_FAR};
 use js_sys::{Uint8Array, WebAssembly};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -56,7 +56,7 @@ fn set_file_reader() -> Result<(), JsValue> {
         let v = buffer.to_vec();
 
         match stl::get_data(&v) {
-            Ok((vertices, num_vertices)) => another(vertices, num_vertices).unwrap(),
+            Ok((vertices, num_vertices)) => render(vertices, num_vertices).unwrap(),
             Err(e) => console::log_1(&format!("The given file is corrupted: Error: {}", e).into()),
         }
     }) as Box<dyn FnMut(_)>);
@@ -82,7 +82,7 @@ fn set_file_reader() -> Result<(), JsValue> {
     Ok(())
 }
 
-fn another(vertices: Vec<f32>, num_vertices: u32) -> Result<(), JsValue> {
+fn render(vertices: Vec<f32>, num_vertices: u32) -> Result<(), JsValue> {
     let document = window()
         .document()
         .expect("should have a document on window");
@@ -94,6 +94,10 @@ fn another(vertices: Vec<f32>, num_vertices: u32) -> Result<(), JsValue> {
         .get_context("webgl")?
         .unwrap()
         .dyn_into::<WebGlRenderingContext>()?;
+
+    gl.clear_color(0.375, 0.375, 0.375, 1.0);
+    gl.clear_depth(1.0);
+    gl.enable(WebGlRenderingContext::DEPTH_TEST);
 
     let vertex_shader_source = r#"
         attribute vec4 aVertexPosition;
@@ -154,6 +158,8 @@ fn another(vertices: Vec<f32>, num_vertices: u32) -> Result<(), JsValue> {
     );
 
     resize_canvas(canvas.clone());
+
+    gl.get_extension("OES_element_index_uint").unwrap();
 
     *g.borrow_mut() = Some(Closure::wrap(Box::new(move |_d| {
         if !*drag.borrow() {
@@ -218,11 +224,7 @@ fn init_buffers(
         Some(&index_buffer),
     );
 
-    let mut indices: Vec<u32> = vec![];
-
-    for i in 0..num_vertices {
-        indices.push(i);
-    }
+    let indices: Vec<u32> = (0..num_vertices).collect();
 
     let index_array = uint_32_array!(indices);
     gl.buffer_data_with_array_buffer_view(
@@ -250,26 +252,19 @@ fn draw_scene(
         vertex_position,
         (location_projection_matrix, location_model_view_matrix),
     ) = program_info;
-    gl.clear_color(0.375, 0.375, 0.375, 1.0);
-    gl.clear_depth(1.0);
-    gl.enable(WebGlRenderingContext::DEPTH_TEST);
-
+    
     gl.clear(WebGlRenderingContext::COLOR_BUFFER_BIT | WebGlRenderingContext::DEPTH_BUFFER_BIT);
-
     gl.viewport(0, 0, canvas.width() as i32, canvas.height() as i32);
 
-    let aspect: f32 = canvas.width() as f32 / canvas.height() as f32;
-    let z_near = 1.0;
-    let z_far = 100.0;
-
+    let aspect_ratio: f32 = canvas.width() as f32 / canvas.height() as f32;
     let mut projection_matrix = mat4::new_zero();
 
     mat4::perspective(
         &mut projection_matrix,
         &FIELD_OF_VIEW,
-        &aspect,
-        &z_near,
-        &z_far,
+        &aspect_ratio,
+        &Z_NEAR,
+        &Z_FAR,
     );
 
     let mut model_view_matrix = mat4::new_identity();
@@ -285,13 +280,15 @@ fn draw_scene(
     gl.bind_buffer(WebGlRenderingContext::ARRAY_BUFFER, Some(&position_buffer));
     gl.vertex_attrib_pointer_with_i32(
         vertex_position,
-        VERTICES_PER_FACET,
+        COMPONENTS_PER_VERTEX,
         WebGlRenderingContext::FLOAT,
         false,
         0,
         0,
     );
+
     gl.enable_vertex_attrib_array(vertex_position);
+    
     gl.bind_buffer(WebGlRenderingContext::ARRAY_BUFFER, None);
 
     gl.bind_buffer(
@@ -306,12 +303,13 @@ fn draw_scene(
         false,
         &projection_matrix,
     );
+    
     gl.uniform_matrix4fv_with_f32_array(
         Some(&location_model_view_matrix?),
         false,
         &model_view_matrix,
     );
-    gl.get_extension("OES_element_index_uint").unwrap();
+
     gl.draw_elements_with_i32(
         WebGlRenderingContext::TRIANGLES,
         num_vertices as i32,
