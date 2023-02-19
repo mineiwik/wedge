@@ -716,7 +716,7 @@ function initSync(module) {
 
 async function init(input) {
     if (typeof input === 'undefined') {
-        input = new URL('wedge-95c80056a850a7e5_bg.wasm', import.meta.url);
+        input = new URL('wedge-22f9fff9a93a66ee_bg.wasm', import.meta.url);
     }
     const imports = getImports();
 
